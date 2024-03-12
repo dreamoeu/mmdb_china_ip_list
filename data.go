@@ -5,13 +5,13 @@ import (
 	"encoding/csv"
 	"strings"
 
-	// "fmt"
-	// "github.com/PuerkitoBio/goquery"
 	"log"
+
+	"github.com/PuerkitoBio/goquery"
 
 	"github.com/maxmind/mmdbwriter/mmdbtype"
 
-	// "net/http"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,7 +27,8 @@ var (
 	aliAS37963IpV4List []string
 	aliAS37963IpV6List []string
 
-	cloudCNList []string
+	cloudCNListV4List []string
+	cloudCNListV6List []string
 
 	countryChina = mmdbtype.Map{
 		"iso_code":             mmdbtype.String("CN"),
@@ -73,10 +74,9 @@ func init() {
 	clangIpV4List = readFileToStringArray("all_cn.txt")
 	clangIpV6List = readFileToStringArray("all_cn_ipv6.txt")
 
-	cloudCNList = readIpsFromClashList("CloudCN.list")
-
 	initLiteCountryMap()
-	// initAliAS37963()
+	initAliAS37963()
+	initCloudCN()
 }
 
 func readFileToStringArray(filePath string) []string {
@@ -91,29 +91,6 @@ func readFileToStringArray(filePath string) []string {
 
 	for scanner.Scan() {
 		strList = append(strList, scanner.Text())
-	}
-
-	return strList
-}
-
-func readIpsFromClashList(filePath string) []string {
-	var strList []string
-	fh, err := os.Open(filepath.Join(workDir, filePath))
-	if err != nil {
-		log.Printf("fail to open %s\n", err)
-		return strList
-	}
-	scanner := bufio.NewScanner(fh)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		clashRule := scanner.Text()
-
-		if strings.HasPrefix(clashRule, "IP-CIDR,") {
-			tmp := strings.Replace(clashRule, "IP-CIDR,", "", -1)
-			ipCidr := strings.Replace(tmp, ",no-resolve", "", -1)
-			strList = append(strList, ipCidr)
-		}
 	}
 
 	return strList
@@ -159,33 +136,60 @@ func initLiteCountryMap() {
 	//log.Printf("%v\n", string(content))
 }
 
-// func initAliAS37963() {
-// 	res, err := http.Get("https://whois.ipip.net/AS37963")
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer res.Body.Close()
+func initAliAS37963() {
+	res, err := http.Get("https://whois.ipip.net/AS37963")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
 
-// 	if res.StatusCode != 200 {
-// 		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
-// 	}
+	if res.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
 
-// 	// Load the HTML document
-// 	doc, err := goquery.NewDocumentFromReader(res.Body)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	doc.Find("#pills-ipv4 table tr td a").Each(func(i int, s *goquery.Selection) {
-// 		ip := s.Text()
-// 		aliAS37963IpV4List = append(aliAS37963IpV4List, ip)
-// 		fmt.Printf("Num %d: %s\n", i, ip)
-// 	})
+	doc.Find("#pills-ipv4 table tr td a").Each(func(i int, s *goquery.Selection) {
+		ip := s.Text()
+		aliAS37963IpV4List = append(aliAS37963IpV4List, ip)
+		log.Printf("Ali AS37963, Num %d: %s\n", i, ip)
+		// fmt.Printf("Num %d: %s\n", i, ip)
+	})
 
-// 	doc.Find("#pills-ipv6 table tr td a").Each(func(i int, s *goquery.Selection) {
-// 		// For each item found, get the title
-// 		ip := s.Text()
-// 		aliAS37963IpV6List = append(aliAS37963IpV6List, ip)
-// 		fmt.Printf("Num %d: %s\n", i, ip)
-// 	})
-// }
+	doc.Find("#pills-ipv6 table tr td a").Each(func(i int, s *goquery.Selection) {
+		// For each item found, get the title
+		ip := s.Text()
+		aliAS37963IpV6List = append(aliAS37963IpV6List, ip)
+		log.Printf("Ali AS37963, Num %d: %s\n", i, ip)
+	})
+}
+
+func initCloudCN() {
+	fh, err := os.Open(filepath.Join(workDir, "CloudCN.list"))
+	if err != nil {
+		log.Printf("fail to open %s\n", err)
+		return
+	}
+	scanner := bufio.NewScanner(fh)
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		clashRule := scanner.Text()
+
+		if strings.HasPrefix(clashRule, "IP-CIDR,") {
+			tmp := strings.Replace(clashRule, "IP-CIDR,", "", -1)
+			ipCidr := strings.Replace(tmp, ",no-resolve", "", -1)
+			log.Printf("CloudCN, %s\n", ipCidr)
+			cloudCNListV4List = append(cloudCNListV4List, ipCidr)
+		} else if strings.HasPrefix(clashRule, "IP-CIDR6,") {
+			tmp := strings.Replace(clashRule, "IP-CIDR6,", "", -1)
+			ipCidr := strings.Replace(tmp, ",no-resolve", "", -1)
+			log.Printf("CloudCN, %s\n", ipCidr)
+			cloudCNListV6List = append(cloudCNListV6List, ipCidr)
+		}
+	}
+}

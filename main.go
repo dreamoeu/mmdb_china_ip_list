@@ -62,6 +62,43 @@ func testResult(mmdbFile string) {
 	testSingleIp("2400:da00::1", mmdbFile)
 }
 
+func insertCsvSkipCN(csvName string) {
+	ipCsvFile, err := os.Open(filepath.Join(workDir, "mindmax", csvName))
+	if err != nil {
+		log.Fatalf("fail to open %s\n", err)
+	}
+	reader := csv.NewReader(ipCsvFile)
+
+	ipCsvLines, err := reader.ReadAll()
+	if err != nil {
+		log.Printf("fail to read csv %s\n", err)
+		return
+	}
+
+	for index, value := range ipCsvLines {
+		if index == 0 {
+			continue
+		}
+
+		_, ipNet, err := net.ParseCIDR(value[0])
+		if err != nil || ipNet == nil {
+			log.Printf("%s fail to parse to CIDR\n", value[0])
+			continue
+		}
+
+		geoNameId, _ := strconv.ParseUint(value[1], 10, 32)
+
+		if geoNameId == 1814991 {
+			continue
+		}
+
+		err = writer.Insert(ipNet, liteCountryMap[geoNameId])
+		if err != nil {
+			log.Fatalf("fail to insert to writer %v\n", err)
+		}
+	}
+}
+
 func buildAll() {
 	log.Print("Start build all.")
 
@@ -100,6 +137,10 @@ func buildAll() {
 	insertIps(aliAS37963IpV4List, cnData)
 	insertIps(aliAS37963IpV6List, cnData)
 
+	// 4
+	insertIps(cloudCNListV4List, cnData)
+	insertIps(cloudCNListV6List, cnData)
+
 	fh, err := os.Create(filepath.Join(workDir, out))
 	if err != nil {
 		log.Fatal(err)
@@ -115,43 +156,6 @@ func buildAll() {
 	testResult(out)
 }
 
-func insertCsvSkipCN(csvName string) {
-	ipCsvFile, err := os.Open(filepath.Join(workDir, "mindmax", csvName))
-	if err != nil {
-		log.Fatalf("fail to open %s\n", err)
-	}
-	reader := csv.NewReader(ipCsvFile)
-
-	ipCsvLines, err := reader.ReadAll()
-	if err != nil {
-		log.Printf("fail to read csv %s\n", err)
-		return
-	}
-
-	for index, value := range ipCsvLines {
-		if index == 0 {
-			continue
-		}
-
-		_, ipNet, err := net.ParseCIDR(value[0])
-		if err != nil || ipNet == nil {
-			log.Printf("%s fail to parse to CIDR\n", value[0])
-			continue
-		}
-
-		geoNameId, _ := strconv.ParseUint(value[1], 10, 32)
-
-		if geoNameId == 1814991 {
-			continue
-		}
-
-		err = writer.Insert(ipNet, liteCountryMap[geoNameId])
-		if err != nil {
-			log.Fatalf("fail to insert to writer %v\n", err)
-		}
-	}
-}
-
 func buildLite() {
 	log.Print("Start build lite.")
 
@@ -165,8 +169,8 @@ func buildLite() {
 	)
 
 	// 0 mindmax data
-	insertCsvSkipCN("GeoLite2-Country-Blocks-IPv4.csv")
-	//insertCsvSkipCN("GeoLite2-Country-Blocks-IPv6.csv")
+	// insertCsvSkipCN("GeoLite2-Country-Blocks-IPv4.csv")
+	// insertCsvSkipCN("GeoLite2-Country-Blocks-IPv6.csv")
 
 	// 1
 	insertIps(chinaIpList, liteCountryMap[1814991])
@@ -179,6 +183,10 @@ func buildLite() {
 	// 3
 	insertIps(aliAS37963IpV4List, liteCountryMap[1814991])
 	insertIps(aliAS37963IpV6List, liteCountryMap[1814991])
+
+	// 4
+	insertIps(cloudCNListV4List, cnData)
+	insertIps(cloudCNListV6List, cnData)
 
 	fh, err := os.Create(filepath.Join(workDir, "lite_"+out))
 	if err != nil {
